@@ -1,0 +1,16 @@
+[project]
+name = "mini-agent"
+version = "0.1.0"
+description = "A minimal agent runtime built from scratch"
+authors = [
+    { name = "youngster-star", email = "dkbzxxsd@163.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+mini-agent = "mini_agent:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
