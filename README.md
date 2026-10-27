@@ -10,14 +10,14 @@
 | --- | --- |
 | 仓库初始化（uv + src 布局） | 完成 |
 | PRD 与阶段设计文档 | 完成（本地保留，不纳入版本控制） |
-| 阶段一：LLM Client | 待实现 |
+| 阶段一：LLM Client | 完成 |
 | 阶段二：Agent Loop | 待实现 |
 | 阶段三：Tool Calling | 待实现 |
 | 阶段四：Memory / Context | 待实现 |
 | 阶段五：Planning | 待实现 |
 | 阶段六：可靠性 / 评估 | 待实现 |
 
-当前可运行的是初始化占位入口，输出 `Hello from mini-agent!`。核心运行时尚未落地。
+当前可运行：加载配置、调用本地 Ollama、解析响应并打印结果；支持超时、有限重试和类型化错误。
 
 ## 设计目标
 
@@ -28,7 +28,7 @@
 
 ## 非目标
 
-v1.0 不包含：多 Agent 协作、RAG / 向量数据库、Web UI、模型训练、分布式执行、容器级沙箱、生产级高可用。
+v1.0 不包含：多 Agent 协作、RAG / 向量数据库、Web UI、模型训练、分布式执行、容器级沙箱、生产级高可用。不实现本地推理引擎，本地模型通过 Ollama 作为外部服务接入。
 
 ## 架构
 
@@ -49,11 +49,25 @@ CLI
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)（推荐）或 Python 自带的 `venv`
-- 一个支持 HTTP API 的大模型服务及其 API Key
+- [Ollama](https://ollama.com/download)（默认模型服务，使用其 OpenAI 兼容端点）
 
 ## 快速开始
 
-### 1. 安装依赖与环境
+### 1. 安装 Ollama 并准备模型
+
+```powershell
+ollama pull qwen3.5:9b
+ollama list
+```
+
+确认 Ollama 正在运行：
+
+```powershell
+ollama ps
+curl.exe http://127.0.0.1:11434/api/tags
+```
+
+### 2. 安装 Python 环境
 
 ```powershell
 uv python install 3.12
@@ -65,61 +79,75 @@ uv sync
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install -e .
 ```
 
 本项目运行期不依赖任何第三方包。
 
-### 2. 配置环境变量
+### 3. 配置环境变量
 
-PowerShell（仅当前窗口）：
+默认连接本机 Ollama，只需要指定模型名：
 
 ```powershell
-$env:MINIAGENT_API_KEY = "sk-..."
-$env:MINIAGENT_BASE_URL = "https://api.example.com/v1"
-$env:MINIAGENT_MODEL = "your-model-name"
+$env:MINIAGENT_MODEL = "qwen3.5:9b"
 ```
 
 macOS / Linux：
 
 ```bash
-export MINIAGENT_API_KEY="sk-..."
-export MINIAGENT_BASE_URL="https://api.example.com/v1"
-export MINIAGENT_MODEL="your-model-name"
+export MINIAGENT_MODEL="qwen3.5:9b"
+```
+
+只有连接远程 OpenAI 兼容服务时才需要设置地址和密钥：
+
+```powershell
+$env:MINIAGENT_BASE_URL = "https://api.example.com/v1"
+$env:MINIAGENT_API_KEY = "sk-..."
+$env:MINIAGENT_MODEL = "your-model-name"
 ```
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `MINIAGENT_API_KEY` | 无（必填） | 模型服务密钥 |
-| `MINIAGENT_BASE_URL` | 无（必填） | API 基础地址，通常包含 `/v1` |
-| `MINIAGENT_MODEL` | 无（必填） | 模型名称 |
-| `MINIAGENT_TIMEOUT` | `60` | 单次模型调用超时（秒） |
+| `MINIAGENT_MODEL` | 无（必填） | 必须与 `ollama list` 中的名称一致 |
+| `MINIAGENT_BASE_URL` | `http://127.0.0.1:11434/v1` | Ollama 的 OpenAI 兼容端点 |
+| `MINIAGENT_API_KEY` | 空 | Ollama 不需要；远程服务才填 |
+| `MINIAGENT_TIMEOUT` | `120` | 单次模型调用超时（秒） |
+| `MINIAGENT_MAX_RETRIES` | `2` | 可重试错误的最大重试次数 |
+| `MINIAGENT_REASONING_EFFORT` | `none` | 思考模型推理强度；`none` 关闭，`auto` 不发送该字段 |
 | `MINIAGENT_MAX_STEPS` | `10` | Agent 最大步数 |
 | `MINIAGENT_WORKSPACE` | `./workspace` | 文件工具允许操作的根目录 |
 | `MINIAGENT_LOG_DIR` | `./logs` | 运行事件目录 |
 
-> 上表为设计约定，随对应阶段实现逐步生效。
+> `MINIAGENT_MAX_STEPS`、`MINIAGENT_WORKSPACE`、`MINIAGENT_LOG_DIR` 随对应阶段实现逐步生效。
 
-### 3. 运行
-
-当前占位入口：
+### 4. 运行
 
 ```powershell
-uv run mini-agent
+uv run mini-agent "用一句话解释什么是幂等性"
 ```
 
-阶段一落地后：
+只做配置检查、不调用模型：
 
 ```powershell
-uv run python main.py "用一句话解释什么是幂等性"
+uv run mini-agent --help
 ```
 
-### 4. 测试
+### 5. 测试
 
 ```powershell
 uv run python -m unittest discover -s tests -v
 ```
 
-单元测试不访问网络；端到端测试在缺少 API Key 时自动跳过。
+单元测试不访问网络；需要真实模型的端到端测试在 Ollama 不可用时自动跳过。
+
+## 本地模型（Ollama）
+
+- 使用 OpenAI 兼容端点 `http://127.0.0.1:11434/v1`，客户端只发送 `stream: false` 的普通请求。
+- 模型名必须与 `ollama list` 完全一致，包含 `:tag`。
+- 思考模型（qwen3、qwen3.5、deepseek-r1、gpt-oss 等）可能把 token 全用于推理并返回空 `content`。默认 `MINIAGENT_REASONING_EFFORT=none` 关闭推理；需要时改为 `low` / `medium` / `high`。切换到不支持该字段的远程服务时，设为 `auto` 以省略。
+- Ollama 的默认上下文可能偏小，长对话会丢失前文。需要更大窗口时用 Modelfile 设置 `num_ctx` 并 `ollama create` 派生模型。
+- 本地请求受系统代理影响时，设置 `NO_PROXY=localhost,127.0.0.1`。
+- 详细说明见 `docs/stage-01-initialization-and-llm-client.md`。
 
 ## 工具规划
 
@@ -139,9 +167,21 @@ uv run python -m unittest discover -s tests -v
 mini_agent/
 ├── src/
 │   └── mini_agent/
-│       └── __init__.py
-├── docs/              # 本地设计文档（不纳入版本控制）
-├── PRD.md             # 本地需求文档（不纳入版本控制）
+│       ├── __init__.py
+│       ├── __main__.py        # python -m mini_agent
+│       ├── config.py          # 环境变量、默认值、校验
+│       ├── main.py            # CLI 装配与单次调用
+│       └── llm/
+│           ├── __init__.py
+│           ├── client.py      # HTTP、超时、重试、错误归一化
+│           ├── mock.py        # 测试用脚本化客户端
+│           └── protocol.py    # OpenAI 兼容响应解析
+├── tests/
+│   ├── test_config.py
+│   └── test_llm_client.py
+├── docs/                  # 本地设计文档（不纳入版本控制）
+├── PRD.md                 # 本地需求文档（不纳入版本控制）
+├── uv.lock
 ├── pyproject.toml
 ├── README.md
 └── .gitignore
@@ -188,6 +228,9 @@ tests/                 # 离线单元测试与 e2e
 ## 文档说明
 
 设计与过程文档位于本地 `docs/`，需求文档为 `PRD.md`。二者不纳入版本控制，仅作为个人开发参考。
+
+- `docs/stage-01-initialization-and-llm-client.md`：环境初始化与 LLM Client
+- `docs/stage-02-agent-loop.md`：Agent Loop 与决策协议（设计稿）
 
 ## 许可证
 
