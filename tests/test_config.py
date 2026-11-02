@@ -1,7 +1,7 @@
 import unittest
 from dataclasses import FrozenInstanceError
 
-from mini_agent.config import OLLAMA_BASE_URL, Config, ConfigError, load_config
+from mini_agent.config import OLLAMA_BASE_URL, ConfigError, load_config, Config
 
 
 def base_env(**overrides: str) -> dict[str, str]:
@@ -44,6 +44,34 @@ class TestLoadConfig(unittest.TestCase):
     def test_repr_hides_api_key(self) -> None:
         config = load_config(base_env(MINIAGENT_API_KEY="sk-test"))
         self.assertNotIn("sk-test", repr(config))
+
+    def test_run_limits_defaults(self) -> None:
+        config = load_config(base_env())
+        self.assertEqual(config.max_steps, 10)
+        self.assertEqual(config.max_consecutive_invalid, 3)
+        self.assertEqual(config.max_duplicate_calls, 3)
+
+    def test_run_limits_from_env(self) -> None:
+        config = load_config(
+            base_env(
+                MINIAGENT_MAX_STEPS="5",
+                MINIAGENT_MAX_CONSECUTIVE_INVALID="2",
+                MINIAGENT_MAX_DUPLICATE_CALLS="1",
+            )
+        )
+        self.assertEqual(config.max_steps, 5)
+        self.assertEqual(config.max_consecutive_invalid, 2)
+        self.assertEqual(config.max_duplicate_calls, 1)
+
+    def test_invalid_max_steps_raises(self) -> None:
+        with self.assertRaises(ConfigError):
+            load_config(base_env(MINIAGENT_MAX_STEPS="0"))
+        with self.assertRaises(ConfigError):
+            load_config(base_env(MINIAGENT_MAX_STEPS="abc"))
+        with self.assertRaises(ConfigError):
+            load_config(base_env(MINIAGENT_MAX_CONSECUTIVE_INVALID="0"))
+        with self.assertRaises(ConfigError):
+            load_config(base_env(MINIAGENT_MAX_DUPLICATE_CALLS="0"))
 
     def test_config_is_immutable(self) -> None:
         config = Config(model="m")
