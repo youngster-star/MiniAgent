@@ -25,6 +25,8 @@ class Config:
     max_steps:int = 10                   # 默认最大步数
     max_consecutive_invalid:int = 3     # 默认最大连续无效步数
     max_duplicate_calls:int = 3         # 默认最大重复调用次数
+    workspace: str="workspace"          # 文件工具工作区
+    max_tool_output_chars: int = 20000   # 单次工具输出上限
 
     def __repr__(self) -> str:          # __repr__ : 表示对象的字符串，类似于Java的toString()
         # 覆盖 dataclass 自动生成的 __repr__，避免密钥进入日志
@@ -88,4 +90,6 @@ def load_config(env: Mapping[str,str] | None = None) -> Config:
         max_steps=_read_positive_int(values,"MINIAGENT_MAX_STEPS",10),
         max_consecutive_invalid=_read_positive_int(values,"MINIAGENT_MAX_CONSECUTIVE_INVALID",3),
         max_duplicate_calls=_read_positive_int(values,"MINIAGENT_MAX_DUPLICATE_CALLS",3),
+        workspace=values.get("MINIAGENT_WORKSPACE","").strip() or "workspace",
+        max_tool_output_chars=_read_positive_int(values,"MINIAGENT_MAX_TOOL_OUTPUT_CHARS",20000),
     )

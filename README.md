@@ -231,6 +231,7 @@ tests/                 # 离线单元测试与 e2e
 
 - `docs/stage-01-initialization-and-llm-client.md`：环境初始化与 LLM Client
 - `docs/stage-02-agent-loop.md`：Agent Loop 与决策协议（设计稿）
+- `docs/stage-03-tool-execution.md`：工具注册、校验与执行（设计稿）
 
 ## 许可证
 

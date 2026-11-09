@@ -18,12 +18,13 @@ SYSTEM_PROMPT = """你是一个受控 Agent 运行时中的决策器。
 你只能输出一个 JSON 对象，不要输出 Markdown 代码块，不要输出解释性文字。
 可用动作：
 1. {"action":"final","thought":"...","content":"给用户的最终答案"}
-2. {"action":"tool_call","thought":"...","tool":"工具名","arguments":{"..."}}
+2. {"action":"tool_call","thought":"...","tool":"工具名","arguments":{...}}
 规则：
 - 任务完成或无需工具时，使用 final。
-- 需要外部信息或操作时，使用 tool_call;一次只请求一个工具。
-- 不要编辑工具结果。
-- 当前阶段尚未注册任何工具；如果收到 TOOL_NOT_FOUND，请说明限制并使用 final
+- 需要外部信息或操作时，使用 tool_call；一次只请求一个工具。
+- 只能使用工具清单中列出的工具，不要编造工具名。
+- 不要编造工具结果。
+- 工具失败时阅读 error_code，调整参数或改用 final，不要重复相同调用。
 """
 class LoopStatus(str,Enum):
     """循环的终止状态"""

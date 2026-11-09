@@ -78,6 +78,26 @@ class TestLoadConfig(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             config.model = "other"  # type: ignore[misc]
 
+    def test_tool_config_defaults(self) -> None:
+        config = load_config(base_env())
+        self.assertEqual(config.workspace, "workspace")
+        self.assertEqual(config.max_tool_output_chars, 20000)
+
+    def test_tool_config_from_env(self) -> None:
+        config = load_config(
+            base_env(
+                MINIAGENT_WORKSPACE="sandbox",
+                MINIAGENT_MAX_TOOL_OUTPUT_CHARS="1000",
+            )
+        )
+        self.assertEqual(config.workspace, "sandbox")
+        self.assertEqual(config.max_tool_output_chars, 1000)
+
+    def test_invalid_max_tool_output_chars(self) -> None:
+        with self.assertRaises(ConfigError):
+            load_config(base_env(MINIAGENT_MAX_TOOL_OUTPUT_CHARS="0"))
+        with self.assertRaises(ConfigError):
+            load_config(base_env(MINIAGENT_MAX_TOOL_OUTPUT_CHARS="abc"))
 
 if __name__ == "__main__":
     unittest.main()

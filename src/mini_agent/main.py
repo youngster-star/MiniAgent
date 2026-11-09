@@ -2,24 +2,31 @@
 
 from __future__ import annotations
 
-import argparse         # 解析命令行参数
+import argparse
 import logging
 import sys
 from dataclasses import replace
 
-from mini_agent.agent.loop import AgentLoop, UnavailableToolExecutor, RunLimits, LoopStatus
+from mini_agent.agent.loop import (
+    SYSTEM_PROMPT,
+    AgentLoop,
+    LoopStatus,
+    RunLimits,
+)
 from mini_agent.config import Config, ConfigError, load_config
 from mini_agent.llm.client import HttpLLMClient, LLMError
 from mini_agent.llm.protocol import LLMProtocolError
+from mini_agent.tools.registry import ToolRegistry
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="MiniAgent 阶段一 CLI")
+    parser = argparse.ArgumentParser(description="MiniAgent 阶段三 CLI")
     parser.add_argument("message", nargs="?", help="单次任务内容")
     parser.add_argument("--model", help="覆盖 MINIAGENT_MODEL")
     parser.add_argument("--base-url", help="覆盖 MINIAGENT_BASE_URL")
     parser.add_argument("--timeout", type=float, help="覆盖单次请求超时（秒）")
-    parser.add_argument("--max-steps", type=int, help="覆盖最大决策步数")
+    parser.add_argument("--max-steps", type=int, help="覆盖最大决策步数")  # [阶段二新增]
+    parser.add_argument("--workspace", help="覆盖 MINIAGENT_WORKSPACE")  # [阶段三新增]
     parser.add_argument("--verbose", action="store_true", help="输出调试日志")
     return parser
 
@@ -39,20 +46,29 @@ def config_from_args(args: argparse.Namespace) -> Config:
         if args.max_steps <= 0:
             raise ConfigError("--max-steps 必须大于 0")
         updates["max_steps"] = args.max_steps
+    if args.workspace:
+        updates["workspace"] = args.workspace
     if not updates:
         return config
     return replace(config, **updates)
 
 
 def run_once(client: HttpLLMClient, goal: str, config: Config) -> int:
+    try:
+        executor = ToolRegistry(config.workspace, config.max_tool_output_chars)
+    except OSError as exc:
+        print(f"工作区不可用：{exc}", file=sys.stderr)
+        return 2
+
     loop = AgentLoop(
         client=client,
-        executor=UnavailableToolExecutor(),
+        executor=executor,
         limits=RunLimits(
             max_steps=config.max_steps,
             max_consecutive_invalid=config.max_consecutive_invalid,
             max_duplicate_calls=config.max_duplicate_calls,
         ),
+        system_prompt=f"{SYSTEM_PROMPT}\n{executor.describe()}",
     )
     try:
         result = loop.run(goal)
